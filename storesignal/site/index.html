@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StoreSignal 独立站信号分析</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23664398%27/%3E%3Cpath d=%27M7 22l6-7 4 4 8-10%27 stroke=%27white%27 stroke-width=%273%27 fill=%27none%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<style>
+:root{--brand:#664398;--brand-dark:#4b2f73;--brand-mid:#8a6bb8;--tint:#f5f1fa;--tint2:#f9f7fc;--line:#e3dcec;--ink:#26222e;--ink2:#5a5566;--muted:#8b8597;--surface:#ffffff;--warn:#9a6700;--warn-bg:#fff8e6}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:var(--tint2);font-size:14px;line-height:1.55}
+header{background:var(--brand);color:#fff}
+.bar{max-width:1180px;margin:0 auto;padding:14px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.logo{font-weight:700;font-size:18px;letter-spacing:.3px}.logo span{font-weight:400;opacity:.8;font-size:13px;margin-left:8px}
+.search{flex:1;display:flex;gap:8px;min-width:280px}
+.search input{flex:1;padding:9px 12px;border:0;border-radius:6px;font-size:14px;min-width:0}
+button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--brand);background:var(--brand);color:#fff;padding:8px 14px}
+button:hover{background:var(--brand-dark)}button.ghost{background:#fff;color:var(--brand)}button.ghost:hover{background:var(--tint)}
+header button{background:#fff;color:var(--brand);border-color:#fff;font-weight:600}header button.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.55);font-weight:400}header button.ghost:hover{background:rgba(255,255,255,.14)}
+nav{background:#fff;border-bottom:1px solid var(--line)}nav .bar{padding:0 20px;gap:4px}
+nav a{padding:11px 14px;color:var(--ink2);text-decoration:none;border-bottom:3px solid transparent;cursor:pointer}nav a.on{color:var(--brand);border-color:var(--brand);font-weight:600}
+main{max-width:1180px;margin:0 auto;padding:20px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden}
+.card h2{margin:0;padding:10px 16px;font-size:14px;background:var(--brand);color:#fff;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card h2 .tag{margin-left:8px;margin-right:auto}.card h2 small{font-weight:400;opacity:.85;font-size:12px}
+.card .body{padding:16px}
+.grid{display:grid;gap:16px}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g6{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+@media(max-width:980px){.g6{grid-template-columns:repeat(3,minmax(0,1fr))}.g3{grid-template-columns:1fr}}@media(max-width:720px){.g2{grid-template-columns:1fr}.g6{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tile{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;border-top:4px solid var(--brand)}
+.tile.est{border-top-color:var(--brand-mid);border-top-style:dashed}
+.tile .k{font-size:12px;color:var(--ink2);display:flex;justify-content:space-between;gap:6px;align-items:center}
+.tile .v{font-size:22px;font-weight:700;margin:6px 0 2px;line-height:1.2;word-break:break-word}.tile .s{font-size:12px;color:var(--muted)}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;white-space:nowrap}
+.tag.m{background:var(--brand);color:#fff}.tag.e{background:#fff;color:var(--brand);border:1px dashed var(--brand)}.tag.a{background:var(--warn-bg);color:var(--warn);border:1px solid #f0d58a}.tag.n{background:#f1f0f3;color:var(--ink2)}
+.head{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
+.head h1{margin:0;font-size:24px}.head .meta{color:var(--ink2);font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px}th{background:var(--tint);color:var(--brand-dark);text-align:left;padding:8px 10px;font-weight:600;border-bottom:1px solid var(--line)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}tr:nth-child(even) td{background:var(--tint2)}td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+.note{background:var(--tint);border-left:4px solid var(--brand);padding:10px 14px;border-radius:0 6px 6px 0;color:var(--ink2);font-size:13px;margin-bottom:16px}
+.note.warn{background:var(--warn-bg);border-color:#d9a400;color:#5c4400}
+.chips{display:flex;flex-wrap:wrap;gap:6px}.chip{background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:12px}.chip b{color:var(--brand);font-weight:600;margin-right:4px}
+.chain{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}@media(max-width:900px){.chain{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.step{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--tint2)}.step .n{font-size:12px;color:var(--ink2)}.step .x{font-size:18px;font-weight:700;margin:2px 0}.step .d{font-size:12px;color:var(--muted)}
+.ctl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}@media(max-width:720px){.ctl{grid-template-columns:1fr}}
+.ctl label{font-size:12px;color:var(--ink2);display:block}.ctl input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font:inherit;margin-top:4px}
+.bar-range{height:14px;background:var(--tint);border-radius:7px;position:relative;margin:8px 0 4px}.bar-range i{position:absolute;top:0;bottom:0;background:var(--brand-mid);border-radius:7px;opacity:.55}.bar-range b{position:absolute;top:-3px;bottom:-3px;width:3px;background:var(--brand-dark);border-radius:2px}
+svg text{font-family:inherit;fill:var(--muted);font-size:11px}
+#tip{position:fixed;pointer-events:none;background:var(--ink);color:#fff;padding:5px 9px;border-radius:5px;font-size:12px;display:none;z-index:9;white-space:nowrap}
+.empty{text-align:center;color:var(--muted);padding:50px 20px}.muted{color:var(--muted)}.mono{font-variant-numeric:tabular-nums}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+dialog{border:1px solid var(--line);border-radius:10px;padding:0;max-width:520px;width:92%}dialog .body{padding:16px}dialog input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;margin:6px 0 12px}
+a{color:var(--brand)}
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <div class="logo">StoreSignal<span>独立站信号分析</span></div>
+  <form class="search" id="form"><input id="domain" placeholder="输入店铺域名，例如 bigblanket.com" autocomplete="off" spellcheck="false"><button type="submit">分析</button></form>
+  <button class="ghost" id="btnSample">看示例</button>
+  <button class="ghost" id="btnSettings">设置</button>
+</div></header>
+<nav><div class="bar"><a data-view="analyze" class="on">分析</a><a data-view="compare">对比</a><a data-view="watch">关注列表</a><a data-view="method">方法说明</a></div></nav>
+<main id="app"></main>
+<div id="tip"></div>
+<dialog id="dlg"><h2 style="margin:0;padding:10px 16px;background:var(--brand);color:#fff;font-size:14px">设置</h2><div class="body">
+  <label>采集端地址（Cloudflare Worker）<input id="workerUrl" placeholder="https://storesignal.你的子域.workers.dev"></label>
+  <div class="muted" style="font-size:12px;margin-bottom:12px">只保存在这台电脑的浏览器里。部署步骤见仓库 README。</div>
+  <div class="row" style="justify-content:flex-end"><button class="ghost" id="dlgCancel">取消</button><button id="dlgSave">保存</button></div>
+</div></dialog>
+<script src="config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
