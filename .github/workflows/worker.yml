@@ -1,9 +1,7 @@
 name: Deploy collector to Cloudflare Workers
 # Needs two repository secrets: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
+# Manual trigger only: run it from the Actions tab after the two secrets are set.
 on:
-  push:
-    branches: [main]
-    paths: ['storesignal/worker/**']
   workflow_dispatch:
 jobs:
   deploy:
