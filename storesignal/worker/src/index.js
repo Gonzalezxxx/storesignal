@@ -32,7 +32,7 @@ export default {
     }
 
     const data = await collect(domain, { fetchFn: (u, init) => fetch(u, init) });
-    if (cache) ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json', 'Cache-Control': `max-age=${CACHE_SECONDS}` } })));
+    if (cache && data.tranco) ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json', 'Cache-Control': `max-age=${CACHE_SECONDS}` } })));
     return reply({ ...data, cached: false }, 200, h);
   },
 };
