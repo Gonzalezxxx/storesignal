@@ -193,15 +193,20 @@ export async function collect(domain, { fetchFn, now = Date.now(), timeoutMs = 1
   const json = (r, name) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); try { return JSON.parse(r.text); } catch { throw new Error(`${name} 返回的不是 JSON`); } };
 
   const [tranco, home, meta, productsRaw, bestHtml, sitemap, rdap] = await Promise.all([
-    step('Tranco 排名', async () => parseTranco(json(await get(`https://tranco-list.eu/api/ranks/domain/${domain}`, 'json'), 'Tranco'))),
+    step('Tranco 排名', async () => {
+      let r;
+      for (let i = 0; i < 3; i++) { r = await get(`https://tranco-list.eu/api/ranks/domain/${domain}`, 'json'); if (r.status !== 429) break; await new Promise((ok) => setTimeout(ok, 1300 * (i + 1))); }
+      if (r.status === 429) throw new Error('Tranco 限流，请稍后点“重新采集”');
+      return parseTranco(json(r, 'Tranco'));
+    }),
     step('店铺首页', async () => get(`${base}/`)),
-    step('Shopify meta.json', async () => { const r = await get(`${base}/meta.json`, 'json'); return r.ok ? JSON.parse(r.text) : null; }),
+    step('Shopify meta.json', async () => { const r = await get(`${base}/meta.json`, 'json'); try { return r.ok ? JSON.parse(r.text) : null; } catch { return null; } }),
     step('Shopify products.json', async () => {
       const all = []; let truncated = false;
       for (let page = 1; page <= 4; page++) {
         const r = await get(`${base}/products.json?limit=250&page=${page}`, 'json');
         if (!r.ok) { if (page === 1) throw new Error(`HTTP ${r.status}`); break; }
-        const list = JSON.parse(r.text).products || [];
+        let list; try { list = JSON.parse(r.text).products || []; } catch { if (page === 1) throw new Error('不是 Shopify 店铺，或关闭了 products.json'); break; }
         all.push(...list);
         if (list.length < 250) break;
         if (page === 4) truncated = true;
