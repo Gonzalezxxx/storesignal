@@ -1,7 +1,7 @@
 // Offline tests: parsing logic against shapes captured from real endpoints.
 import assert from 'node:assert/strict';
 import { collect, normalizeDomain, parseTranco, summarizeCatalog, parseBestsellerHandles, parseReviews, classifyPath, detectTech } from '../worker/src/collect.js';
-import { estimate, signalScore, MODEL } from '../site/model.js';
+import { estimate, signalScore, classify, visitsParams, backtest, FIT, AD_PRIORS } from '../site/model.js';
 
 const NOW = Date.parse('2026-11-14T17:00:00Z');
 assert.equal(normalizeDomain('https://www.BigBlanket.com/products/x?y=1'), 'bigblanket.com');
@@ -74,8 +74,18 @@ assert.equal(dead.catalog, null); assert.equal(dead.bestsellers, null); assert.e
 
 // Model arithmetic.
 const e = estimate(out, {});
-const C = MODEL.visitsConstant;
+assert.equal(e.type.cls, 'ad'); assert.equal(e.type.points, 3);
+const C = visitsParams(e.type.cls).constant;
 assert.equal(e.visits.mid, Math.round(C / 314672));
+assert.ok(FIT.ad.constant > FIT.brand.constant); assert.equal(FIT.brand.n, 3); assert.equal(FIT.ad.n, 2);
+assert.ok(Math.abs(e.cvr.mid - AD_PRIORS.cvrPct) < 1e-9);
+const brandLike = { ...out, catalog: { ...out.catalog, onSalePct: 18, medianDiscountPct: 40, total: 93 } };
+assert.equal(classify(brandLike).cls, 'brand'); assert.equal(estimate(brandLike, {}).visits.mid, Math.round(FIT.brand.constant / 314672));
+assert.equal(classify({ ...out, catalog: { ...out.catalog, onSalePct: 68.8, medianDiscountPct: 33, total: 67 }, domainAge: null }).cls, 'mixed');
+assert.equal(classify(dead).cls, 'unknown');
+for (const b of backtest()) assert.ok(b.ratio > 1 / FIT[b.cls].factor - 1e-9 && b.ratio < FIT[b.cls].factor + 1e-9);
+const known = estimate({ ...out, domain: 'officialsnugsy.com', tranco: { ranked: false, series: [] } }, {});
+assert.equal(known.known.orders, 380); assert.deepEqual(known.reference, { low: 380, high: 600, n: 2 });
 assert.ok(Math.abs(e.aov.mid - 135 * 1.1) < 0.01);
 assert.ok(Math.abs(e.orders.mid - e.visits.mid * e.cvr.mid / 100) < 1);
 assert.ok(Math.abs(e.gmv.mid - e.visits.mid * e.cvr.mid / 100 * e.aov.mid) < 2);
