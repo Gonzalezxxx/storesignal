@@ -1,4 +1,4 @@
-import { estimate, signalScore, MODEL, ANCHORS } from './model.js';
+import { estimate, signalScore, MODEL, CALIBRATION, FIT, AD_PRIORS, backtest } from './model.js';
 
 const $ = (s) => document.querySelector(s);
 const app = $('#app');
@@ -101,11 +101,11 @@ function renderAnalysis() {
   return `
   ${state.isSample ? `<div class="note">这是内置示例：${esc(d.collectedAt.slice(0, 10))} 对 bigblanket.com 的一次真实采集结果。配置采集端后即可分析任意域名。</div>` : ''}
   <div class="head"><div><h1>${esc((d.shop && d.shop.name) || d.domain)}</h1>
-    <div class="meta">${esc(d.domain)} · ${esc(s ? s.platform : '平台未识别')}${d.shop && d.shop.country ? ' · ' + esc(d.shop.country) : ''} · ${esc(cur)} · 采集于 ${esc(d.collectedAt.replace('T', ' ').slice(0, 16))} UTC${d.cached ? ' · 来自 6 小时缓存' : ''}</div></div>
+    <div class="meta">${esc(d.domain)} · <b>${esc(e.type.label)}</b> · ${esc(s ? s.platform : '平台未识别')}${d.shop && d.shop.country ? ' · ' + esc(d.shop.country) : ''} · ${esc(cur)} · 采集于 ${esc(d.collectedAt.replace('T', ' ').slice(0, 16))} UTC${d.cached ? ' · 来自 6 小时缓存' : ''}</div></div>
     <div class="row">${state.isSample ? '' : `<button class="ghost" data-act="refresh">重新采集</button>`}<button class="ghost" data-act="watch">${watch.includes(d.domain) ? '已在关注列表' : '加入关注'}</button><button class="ghost" data-act="export">导出 JSON</button></div></div>
 
   <div class="grid g6" style="margin-bottom:16px">
-    ${tile('Tranco 全球排名', t ? T.m : T.n, t ? (t.ranked ? '#' + int(t.latest.rank) : '未进前 100 万') : '无', t && t.ranked ? `${t.days} 天${t.improvementPct >= 0 ? '上升' : '下降'} ${Math.abs(t.improvementPct)}%` : '排名榜只收录前 100 万')}
+    ${tile('Tranco 全球排名', t ? T.m : T.n, t ? (t.ranked ? '#' + int(t.latest.rank) : '不在榜单内') : '无', t && t.ranked ? `${t.days} 天${t.improvementPct >= 0 ? '上升' : '下降'} ${Math.abs(t.improvementPct)}%` : '榜单约收录前 440 万名')}
     ${tile('月访问量', e.visits ? (e.visits.overridden ? T.a : T.e) : T.n, e.visits ? (e.visits.mid === null ? '≤ ' + compact(e.visits.upperBound) : compact(e.visits.mid)) : '无', e.visits && e.visits.mid !== null && !e.visits.overridden ? `区间 ${compact(e.visits.low)} 到 ${compact(e.visits.high)}` : e.visits ? esc(e.visits.basis) : '没有排名数据', true)}
     ${tile('畅销款价格中位数', b ? T.m : c ? T.m : T.n, b ? money(b.medianPrice, cur) : c && c.price ? money(c.price.median, cur) : '无', b ? `前 ${b.items.length} 款，${money(b.p25, cur)} 到 ${money(b.p75, cur)}` : c ? '全目录中位数' : '没取到商品')}
     ${tile('月订单量', e.orders ? T.e : T.n, e.orders ? (e.orders.mid === null ? '≤ ' + compact(e.orders.upperBound) : compact(e.orders.mid)) : '无', e.orders && e.orders.mid !== null ? `区间 ${compact(e.orders.low)} 到 ${compact(e.orders.high)}` : e.orders ? '只能给上限' : '数据不足', true)}
@@ -124,6 +124,9 @@ function renderAnalysis() {
     ${e.gmv && e.gmv.mid !== null ? `<div style="margin-top:14px"><div class="row" style="justify-content:space-between"><b>GMV 区间 ${usd(e.gmv.low)} 到 ${usd(e.gmv.high)}</b><span class="muted">上下各约 ${e.gmv.factor.toFixed(1)} 倍${anyOverride ? '（已按你的输入收窄）' : '，这是免费公开数据能做到的真实精度'}</span></div>
       <div class="bar-range"><i style="left:${pos(e.gmv.low, e.gmv)}%;right:${100 - pos(e.gmv.high, e.gmv)}%"></i><b style="left:${pos(e.gmv.mid, e.gmv)}%"></b></div>
       <div class="row muted" style="justify-content:space-between;font-size:12px"><span>${usd(e.gmv.low / 2)}</span><span>对数刻度，竖线是中值</span><span>${usd(e.gmv.high * 2)}</span></div></div>` : ''}
+    <div class="note" style="margin:14px 0 0"><b>店铺类型：${esc(e.type.label)}</b>${e.type.points !== null ? `（投流型特征命中 ${e.type.points} / 4）` : ''}。${e.type.reasons.map(esc).join('；')}。访问量常数按类型分开拟合，见“方法说明”。</div>
+    ${e.reference ? `<div class="note" style="margin:10px 0 0"><b>同类参考：</b>已知的 ${e.reference.n} 家无排名投流型店铺，月单量在 ${int(e.reference.low)} 到 ${int(e.reference.high)} 单之间。这是参考，不是对本店的测算。</div>` : ''}
+    ${e.known ? `<div class="note warn" style="margin:10px 0 0"><b>本站有已知参考值：</b>${[e.known.visits ? `月访问 ${int(e.known.visits)}` : '', e.known.orders ? `月订单 ${int(e.known.orders)}` : '', e.known.aov ? `客单价 $${e.known.aov}` : ''].filter(Boolean).join('，')}。来源：${esc(e.known.source)}。${e.known.confirmed ? '已确认。' : '尚未经后台数据确认。'}</div>` : ''}
     <div class="ctl">
       <label>已知月访问量（留空则用排名推算）<input type="number" min="0" step="1000" data-ov="visits" value="${esc(state.overrides.visits || '')}" placeholder="${e.visits && e.visits.mid ? Math.round(e.visits.mid) : ''}"></label>
       <label>已知转化率 %（留空则用行业先验）<input type="number" min="0" step="0.1" data-ov="cvrPct" value="${esc(state.overrides.cvrPct || '')}" placeholder="${e.cvr ? e.cvr.mid.toFixed(2) : ''}"></label>
@@ -132,7 +135,7 @@ function renderAnalysis() {
   </div></div>
 
   <div class="grid g2">
-    <div class="card"><h2>Tranco 排名走势 ${T.m}<small>越靠上越好</small></h2><div class="body">${t && t.ranked && t.series.length > 1 ? rankChart(t.series) + `<div class="muted" style="font-size:12px">30 天均值 #${int(t.avg30)}。Tranco 是综合多个榜单的公开域名热度排名，本身已做 30 天平滑。</div>` : `<div class="empty">${t ? '该域名未进入 Tranco 前 100 万，没有走势可画' : '没取到 Tranco 数据'}</div>`}</div></div>
+    <div class="card"><h2>Tranco 排名走势 ${T.m}<small>越靠上越好</small></h2><div class="body">${t && t.ranked && t.series.length > 1 ? rankChart(t.series) + `<div class="muted" style="font-size:12px">30 天均值 #${int(t.avg30)}。Tranco 是综合多个榜单的公开域名热度排名，本身已做 30 天平滑。</div>` : `<div class="empty">${t ? '该域名不在 Tranco 榜单内，没有走势可画' : '没取到 Tranco 数据'}</div>`}</div></div>
     <div class="card"><h2>商品价格分布 ${T.m}<small>${c ? `${c.priced} 款，已剔除 ${c.noiseExcluded} 个礼品卡或运费险类条目` : ''}</small></h2><div class="body">${c ? barChart(c.histogram.map((h) => ({ label: h.to === null ? `${h.from}+` : `${h.from}`, sub: '', value: h.count, tip: `${h.from} 到 ${h.to === null ? '以上' : h.to} ${cur}：${h.count} 款` }))) + `<div class="muted" style="font-size:12px">横轴是价格区间起点（${esc(cur)}）。中位数 ${money(c.price.median, cur)}，${c.onSalePct}% 的商品带划线价，中位折扣 ${c.medianDiscountPct ?? 0}%。</div>` : '<div class="empty">没取到商品目录（非 Shopify 或关闭了 products.json）</div>'}</div></div>
     <div class="card"><h2>上新节奏 ${T.m}<small>近 12 个月每月发布的商品数</small></h2><div class="body">${c ? barChart(c.publishedByMonth.map((m) => ({ label: m.month.slice(5), value: m.count, tip: `${m.month}：上新 ${m.count} 款` }))) + `<div class="muted" style="font-size:12px">近 90 天上新 ${c.newLast90d} 款，在售率 ${c.inStockPct}%，最早一款发布于 ${esc(c.oldestPublished || '未知')}。</div>` : '<div class="empty">没取到商品目录</div>'}</div></div>
     <div class="card"><h2>Sitemap 页面构成 ${T.m}<small>这是页面数量，不是流量占比</small></h2><div class="body">${sm ? hbars([{ label: '商品页', value: sm.counts.products }, { label: '集合页', value: sm.counts.collections }, { label: '博客文章', value: sm.counts.blogs }, { label: '单页', value: sm.counts.pages }, { label: '其他', value: sm.counts.other }]) + `<div class="muted" style="font-size:12px;margin-top:8px">共 ${int(sm.total)} 个 URL，${sm.subSitemaps} 个子 sitemap${sm.truncated ? '，只读了前 8 个' : ''}。</div>` : '<div class="empty">没取到 sitemap.xml</div>'}</div></div>
@@ -171,7 +174,8 @@ function renderCompare() {
     ${state.cmpStatus ? `<div class="muted" style="margin-top:8px">${esc(state.cmpStatus)}</div>` : ''}</div></div>
   ${rows.length ? `<div class="card"><div class="body" style="padding:0;overflow:auto"><table><tr><th>指标</th>${rows.map((r) => `<th class="r">${esc(r.domain)}</th>`).join('')}</tr>
     ${line('店铺名', T.m, (d) => esc((d.shop && d.shop.name) || ''))}
-    ${line('Tranco 排名', T.m, (d) => (d.tranco ? (d.tranco.ranked ? '#' + int(d.tranco.latest.rank) : '未进前 100 万') : '无'))}
+    ${line('店铺类型', T.e, (d, e) => esc(e.type.label))}
+    ${line('Tranco 排名', T.m, (d) => (d.tranco ? (d.tranco.ranked ? '#' + int(d.tranco.latest.rank) : '不在榜单内') : '无'))}
     ${line('30 天排名变化', T.m, (d) => (d.tranco && d.tranco.ranked ? (d.tranco.improvementPct >= 0 ? '上升 ' : '下降 ') + Math.abs(d.tranco.improvementPct) + '%' : ''))}
     ${line('商品数', T.m, (d) => (d.catalog ? int(d.catalog.total) : '无'))}
     ${line('畅销款价格中位数', T.m, (d) => (d.bestsellers ? money(d.bestsellers.medianPrice, (d.shop && d.shop.currency) || 'USD') : '无'))}
@@ -219,14 +223,16 @@ function renderMethod() {
     <tr><td>域名注册日期</td><td>RDAP 注册局</td><td>${T.m}</td></tr>
     <tr><td>评价数和星级</td><td>畅销第一商品页上的评价挂件或结构化数据</td><td>${T.m} 是该页面的数，不一定是全站</td></tr>
     <tr><td>技术栈</td><td>首页源码里的脚本域名指纹</td><td>${T.m}</td></tr>
-    <tr><td>月访问量</td><td>C ÷ Tranco 排名，C = ${compact(MODEL.visitsConstant)}，误差按 ${MODEL.visitsFactor.toFixed(1)} 倍算</td><td>${T.e}</td></tr>
+    <tr><td>店铺类型</td><td>四个可测特征：带划线价商品 ≥ 60%、中位折扣 ≥ 30%、商品数 ≤ 50、域名 &lt; 5 年。命中 3 个以上判为投流型；否则域名 ≥ 8 年或划线价商品 &lt; 40% 判为品牌型；其余为混合型</td><td>${T.e}</td></tr>
+    <tr><td>月访问量</td><td>C ÷ Tranco 排名，C 按类型分开拟合。品牌型 C = ${(FIT.brand.constant / 1e8).toFixed(0)} 亿（${FIT.brand.n} 个锚点，误差 ${FIT.brand.factor.toFixed(1)} 倍）；投流型 C = ${(FIT.ad.constant / 1e8).toFixed(0)} 亿（${FIT.ad.n} 个锚点，误差 ${FIT.ad.factor.toFixed(1)} 倍）；混合型取两者几何平均，区间覆盖两条线</td><td>${T.e}</td></tr>
+    <tr><td>投流型转化率</td><td>已知投流型店铺的订单 ÷ 访问量中位数，目前 ${AD_PRIORS.cvrPct ? AD_PRIORS.cvrPct.toFixed(2) + '%' : '无'}（${AD_PRIORS.cvrN} 个样本），误差 ${MODEL.adCvrFactor} 倍</td><td>${T.a}</td></tr>
     <tr><td>转化率</td><td>${MODEL.cvrBasePct}% × (${MODEL.cvrRefAov} ÷ 客单价)^${MODEL.cvrElasticity}，限制在 ${MODEL.cvrMinPct}% 到 ${MODEL.cvrMaxPct}%，误差 ${MODEL.cvrFactor} 倍</td><td>${T.a}</td></tr>
     <tr><td>客单价</td><td>畅销款价格中位数 × 连带系数 ${MODEL.basketDefault}</td><td>${T.m} × ${T.a}</td></tr>
     <tr><td>GMV 区间</td><td>三项相乘；区间在对数空间合成，不是把三个上限直接相乘</td><td>${T.e}</td></tr></table></div></div>
-  <div class="card"><h2>访问量换算用的锚点<small>目前是第三方工具的估算，不是真实后台数据</small></h2><div class="body" style="padding:0"><table><tr><th>站点</th><th class="r">Tranco 排名</th><th class="r">月访问量</th><th>出处</th></tr>
-    ${ANCHORS.map((a) => `<tr><td>${esc(a.domain)}</td><td class="r">#${int(a.rank)}</td><td class="r">${int(a.visits)}</td><td class="muted">${esc(a.note)}</td></tr>`).join('')}</table></div></div>
-  <div class="note"><b>怎么让它更准：</b>把 site/model.js 里的 ANCHORS 换成你知道真实访问量的站点（比如客户后台数据），C 和误差倍数会自动重算。锚点越多、越接近你要分析的店铺体量，区间越窄。</div>
-  <div class="note warn"><b>做不到的事：</b>未进 Tranco 前 100 万的小站只能给访问量上限；广告数量和花费、流量来源占比、关键词排名、评价原文情感，这些没有免费可靠来源，本工具不展示。</div>`;
+  <div class="card"><h2>访问量换算用的锚点<small>目前是第三方工具的估算，不是真实后台数据</small></h2><div class="body" style="padding:0"><table><tr><th>站点</th><th>类型</th><th class="r">Tranco 排名</th><th class="r">已知月访问</th><th class="r">模型算出</th><th class="r">模型 ÷ 已知</th><th class="r">已知月单</th><th>出处</th><th>状态</th></tr>
+    ${CALIBRATION.map((a) => { const b = backtest().find((x) => x.domain === a.domain); return `<tr><td>${esc(a.domain)}</td><td>${a.cls === 'ad' ? '投流型' : '品牌型'}</td><td class="r">${a.rank ? '#' + int(a.rank) : '无排名'}</td><td class="r">${a.visits ? int(a.visits) : ''}</td><td class="r">${b ? int(b.model) : ''}</td><td class="r">${b ? b.ratio.toFixed(2) + ' 倍' : ''}</td><td class="r">${a.orders ? int(a.orders) : ''}</td><td class="muted">${esc(a.source)}</td><td>${a.confirmed ? '已确认' : '待确认'}</td></tr>`; }).join('')}</table></div></div>
+  <div class="note"><b>怎么让它更准：</b>在 site/model.js 的 CALIBRATION 里增加你知道真实数据的站点（域名、类型、排名、月访问或月单量），两条线的 C、误差倍数和上面这张回测表都会自动重算。上表是样本内回测，偏乐观；投流型目前只有 2 个带排名的锚点，结论很弱。锚点越多、越接近你要分析的店铺体量，区间越窄。</div>
+  <div class="note warn"><b>做不到的事：</b>不在 Tranco 榜单内的小站只能给访问量上限；广告数量和花费、流量来源占比、关键词排名、评价原文情感，这些没有免费可靠来源，本工具不展示。</div>`;
 }
 
 // ---------- shell ----------
